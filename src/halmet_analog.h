@@ -7,7 +7,7 @@
 
 using namespace sensesp;
 
-
 FloatProducer* ConnectTankSender(Adafruit_ADS1115* ads1115, int channel, String name);
+FloatProducer* ConnectEngineSender(Adafruit_ADS1115* ads1115, int channel, String name, String units);
 
 #endif

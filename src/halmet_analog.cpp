@@ -14,6 +14,84 @@ const float kMeasurementCurrent = 0.01;
 // Default fuel tank size, in m3
 const float kTankDefaultSize = 120. / 1000;
 
+FloatProducer* ConnectEngineOilSender(Adafruit_ADS1115* ads1115, int channel,
+                                 String name, String units) {
+  auto engine_value = (new CurveInterpolator(nullptr, config_path))
+                        ->set_input_title("Input Voltage")
+                        ->set_output_title("Value");
+  if (engine_value->get_samples().empty()) {
+    // If there's no prior configuration, provide a default curve
+    engine_value->clear_samples();
+    engine_value->add_sample(CurveInterpolator::Sample(0, 270));
+    engine_value->add_sample(CurveInterpolator::Sample(180., 290));
+    engine_value->add_sample(CurveInterpolator::Sample(300., 370));
+  }    
+
+                                 }
+
+FloatProducer* ConnectEngineSender(Adafruit_ADS1115* ads1115, int channel,
+                                 String name, String units, ValueConsumer<float> *engine_value) {
+  const uint ads_read_delay = 500;  // ms
+
+  char config_path[80];
+  char sk_path[80];
+  char meta_display_name[80];
+  char meta_description[80];
+
+  snprintf(config_path, sizeof(config_path), "/Engine %s/Resistance",
+           name.c_str());
+  auto sender_resistance =
+      new RepeatSensor<float>(ads_read_delay, [ads1115, channel]() {
+        int16_t adc_output = ads1115->readADC_SingleEnded(channel);
+        float adc_output_volts = ads1115->computeVolts(adc_output);
+        return kAnalogInputScale * adc_output_volts / kMeasurementCurrent;
+      });
+
+  snprintf(config_path, sizeof(config_path), "/Engine %s/Resistance SK Path",
+           name.c_str());
+  snprintf(sk_path, sizeof(sk_path), "tanks.fuel.%s.senderResistance",
+           name.c_str());
+  snprintf(meta_display_name, sizeof(meta_display_name), "Resistance %s",
+           name.c_str());
+  snprintf(meta_description, sizeof(meta_description),
+           "Measured engine %s sender resistance", name.c_str());
+
+  snprintf(config_path, sizeof(config_path), "/Engine %s/Value Curve",
+           name.c_str());
+
+   sender_resistance->connect_to(engine_value);
+
+  snprintf(config_path, sizeof(config_path), "/Engine %s/Current Level SK Path",
+           name.c_str());
+  snprintf(sk_path, sizeof(sk_path), "tanks.fuel.%s.currentLevel",
+           name.c_str());
+  snprintf(meta_display_name, sizeof(meta_display_name), "Engine %s value",
+           name.c_str());
+  snprintf(meta_description, sizeof(meta_description), "Engine %s value (pressure in bar, temp in kelvin)",
+           name.c_str());
+
+#ifdef ENABLE_SIGNALK
+  auto sender_resistance_sk_output = new SKOutputFloat(
+      sk_path, config_path,
+      new SKMetadata("ohm", meta_display_name, meta_description));
+  sender_resistance->connect_to(sender_resistance_sk_output);
+
+  auto tank_level_sk_output = new SKOutputFloat(
+      sk_path, config_path,
+      new SKMetadata("ratio", meta_display_name, meta_description));
+  tank_level->connect_to(tank_level_sk_output);
+
+  auto engine_value_sk_output
+  tput = new SKOutputFloat(
+      sk_path, config_path,
+      new SKMetadata(units, meta_display_name, meta_description));
+  tank_volume->connect_to(engine_value_sk_output);
+#endif
+
+  return engine_value;
+}
+
+
 FloatProducer* ConnectTankSender(Adafruit_ADS1115* ads1115, int channel,
                                  String name) {
   const uint ads_read_delay = 500;  // ms

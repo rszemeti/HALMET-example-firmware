@@ -172,7 +172,8 @@ void setup() {
                     ->set_hostname("halmet")
                     // EDIT: Optionally, hard-code the WiFi and Signal K server
                     // settings. This is normally not needed.
-                    //->set_wifi("My WiFi SSID", "my_wifi_password")
+                    // If connecting to a wifi network is not needed, comment out
+                    ->set_wifi("wifi-network-name", "wifi-password")
                     //->set_sk_server("192.168.10.3", 80)
                     ->get_app();
 
@@ -195,8 +196,8 @@ void setup() {
   // Connect the tank senders.
   // EDIT: To enable more tanks, uncomment the lines below.
   auto tank_a1_volume = ConnectTankSender(ads1115, 0, "fuel");
-  // auto tank_a2_volume = ConnectTankSender(ads1115, 1, "A2");
-  // auto tank_a3_volume = ConnectTankSender(ads1115, 2, "A3");
+  // auto engine_oil_pressure = ConnectTankSender(ads1115, 1, "oil pressure");
+  // auto engine_oil_temperature = ConnectTankSender(ads1115, 2, "coolant temperature");
   // auto tank_a4_volume = ConnectTankSender(ads1115, 3, "A4");
 
 #ifdef ENABLE_NMEA2000_OUTPUT
@@ -205,6 +206,7 @@ void setup() {
   N2kFluidLevelSender* tank_a1_sender = new N2kFluidLevelSender(
       "/NMEA 2000/Tank 1", 0, N2kft_Fuel, 200, nmea2000);
   tank_a1_volume->connect_to(&(tank_a1_sender->tank_level_consumer_));
+
 #endif  // ENABLE_NMEA2000_OUTPUT
 
   if (display_present) {
@@ -234,6 +236,9 @@ void setup() {
   // alarm_d4_input->connect_to(
   //     new LambdaConsumer<bool>([](bool value) { alarm_states[3] = value; }));
 
+  auto engine_oil_pressure = ConnectEngineSender(ads1115, 1, "oil pressure","pa");
+  auto engine_oil_temperature = ConnectEngineSender(ads1115, 2, "coolant temperature","k");
+
 #ifdef ENABLE_NMEA2000_OUTPUT
   // EDIT: This example connects the D2 alarm input to the low oil pressure
   // warning. Modify according to your needs.
@@ -246,6 +251,15 @@ void setup() {
   // active-low (inverted).
   alarm_d3_inverted->connect_to(
       &(engine_dynamic_sender->over_temperature_consumer_));
+
+  // Connect the oil pressure and temperature sensors to the N2k sender.
+  engine_oil_pressure->connect_to(  // Oil pressure in pascal
+      new LambdaTransform<float, float>([](float value) { return value * 689476.00; }))
+      ->connect_to(&(engine_dynamic_sender->oil_pressure_consumer_));
+
+  engine_oil_temperature->connect_to(  // Temperature in degrees Celsius  
+      new LambdaTransform<float, float>([](float value) { return value; }))
+      ->connect_to(&(engine_dynamic_sender->temperature_consumer_  ));  
 #endif  // ENABLE_NMEA2000_OUTPUT
 
   // FIXME: Transmit the alarms over SK as well.
@@ -262,10 +276,15 @@ void setup() {
   // EDIT: Make sure this matches your tacho configuration above.
   //       Duplicate the lines below to connect more tachos, but be sure to
   //       use different engine instances.
-  N2kEngineParameterRapidSender* engine_rapid_sender =
+  /*
+  
+    N2kEngineParameterRapidSender* engine_rapid_sender =
       new N2kEngineParameterRapidSender("/NMEA 2000/Engine 1 Rapid Update", 0,
                                         nmea2000);  // Engine 1, instance 0
   tacho_d1_frequency->connect_to(&(engine_rapid_sender->engine_speed_consumer_));
+  
+  */
+
 #endif  // ENABLE_NMEA2000_OUTPUT
 
   if (display_present) {
