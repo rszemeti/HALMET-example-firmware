@@ -14,23 +14,8 @@ const float kMeasurementCurrent = 0.01;
 // Default fuel tank size, in m3
 const float kTankDefaultSize = 120. / 1000;
 
-FloatProducer* ConnectEngineOilSender(Adafruit_ADS1115* ads1115, int channel,
-                                 String name, String units) {
-  auto engine_value = (new CurveInterpolator(nullptr, config_path))
-                        ->set_input_title("Input Voltage")
-                        ->set_output_title("Value");
-  if (engine_value->get_samples().empty()) {
-    // If there's no prior configuration, provide a default curve
-    engine_value->clear_samples();
-    engine_value->add_sample(CurveInterpolator::Sample(0, 270));
-    engine_value->add_sample(CurveInterpolator::Sample(180., 290));
-    engine_value->add_sample(CurveInterpolator::Sample(300., 370));
-  }    
-
-                                 }
-
 FloatProducer* ConnectEngineSender(Adafruit_ADS1115* ads1115, int channel,
-                                 String name, String units, ValueConsumer<float> *engine_value) {
+                                 String name, String units) {
   const uint ads_read_delay = 500;  // ms
 
   char config_path[80];
@@ -58,8 +43,18 @@ FloatProducer* ConnectEngineSender(Adafruit_ADS1115* ads1115, int channel,
 
   snprintf(config_path, sizeof(config_path), "/Engine %s/Value Curve",
            name.c_str());
+  auto engine_value = (new CurveInterpolator(nullptr, config_path))
+                        ->set_input_title("Input Voltage")
+                        ->set_output_title("Value");
+  sender_resistance->connect_to(engine_value);
 
-   sender_resistance->connect_to(engine_value);
+  if (engine_value->get_samples().empty()) {
+    // If there's no prior configuration, provide a default curve
+    engine_value->clear_samples();
+    engine_value->add_sample(CurveInterpolator::Sample(0, 270));
+    engine_value->add_sample(CurveInterpolator::Sample(180., 290));
+    engine_value->add_sample(CurveInterpolator::Sample(300., 370));
+  }
 
   snprintf(config_path, sizeof(config_path), "/Engine %s/Current Level SK Path",
            name.c_str());
