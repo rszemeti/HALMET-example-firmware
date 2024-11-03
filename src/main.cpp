@@ -26,6 +26,8 @@
 #include "sensesp/system/system_status_led.h"
 #include "sensesp/transforms/lambda_transform.h"
 #include "sensesp/transforms/linear.h"
+#include "sensesp/transforms/curveinterpolator.h"
+#include "sensesp/transforms/moving_average.h"
 #include "sensesp/ui/config_item.h"
 
 #ifdef ENABLE_SIGNALK
@@ -211,6 +213,7 @@ void setup() {
   bool enable_signalk_output = false;
 #endif
 
+  int sortOrder =3000;
   // Connect the tank senders.
   // EDIT: To enable more tanks, uncomment the lines below.
   auto tank_a1_volume = ConnectTankSender(ads1115, 0, "Fuel", "fuel.main", 3000,
@@ -237,36 +240,128 @@ void setup() {
   if (display_present) {
     // EDIT: Duplicate the lines below to make the display show all your tanks.
     tank_a1_volume->connect_to(new LambdaConsumer<float>(
-        [](float value) { PrintValue(display, 2, "Tank A1", 100 * value); }));
+        [](float value) { PrintValue(display, 2, "Fuel A1", 100 * value); }));
   }
+
+
 
   // Read the voltage level of analog input A2
   auto a2_voltage = new ADS1115VoltageInput(ads1115, 1, "/Voltage A2");
 
+/*
+
   ConfigItem(a2_voltage)
       ->set_title("Analog Voltage A2")
       ->set_description("Voltage level of analog input A2")
-      ->set_sort_order(3000);
+      ->set_sort_order(3200);
+
+*/
 
   a2_voltage->connect_to(new LambdaConsumer<float>(
       [](float value) { debugD("Voltage A2: %f", value); }));
 
-  // If you want to output something else than the voltage value,
-  // you can insert a suitable transform here.
-  // For example, to convert the voltage to a distance with a conversion
-  // factor of 0.17 m/V, you could use the following code:
-  // auto a2_distance = new Linear(0.17, 0.0);
-  // a2_voltage->connect_to(a2_distance);
+  auto a2_temperature = (new CurveInterpolator(nullptr, "/Engine/main/Temp A2"))
+                        ->set_input_title("Sensor Voltage (V)")
+                        ->set_output_title("Engine Temperature (C)");
+
+  ConfigItem(a2_temperature)
+      ->set_title("Engine Temperature (A2)")
+      ->set_description("Voltage to Degrees C Mapping")
+      ->set_sort_order(3201);
+
+  a2_voltage->connect_to(a2_temperature);
+
+  auto a2_temperature_kelvin = (new Linear(1, 273.15));
+  a2_temperature->connect_to(a2_temperature_kelvin);
 
 #ifdef ENABLE_SIGNALK
   a2_voltage->connect_to(
-      new SKOutputFloat("Analog Voltage A2", "sensors.a2.voltage",
-                        new SKMetadata("Analog Voltage A2", "V")));
-  // Example of how to output the distance value to Signal K.
-  // a2_distance->connect_to(
-  //     new SKOutputFloat("Analog Distance A2", "sensors.a2.distance",
-  //                       new SKMetadata("Analog Distance A2", "m")));
+      new SKOutputFloat("engine.1.temperature.voltage","Temp Sensor A2", 
+                        new SKMetadata("V", "Volts")));
+
+   a2_temperature->connect_to(
+      new SKOutputFloat("engine.1.temperature.celsius", "Engine Temperature(C)", 
+                        new SKMetadata("C", "Celsius")));
+
+   a2_temperature_kelvin->connect_to(
+      new SKOutputFloat("engine.1.temperature","Engine Temperature(K)", 
+                        new SKMetadata("K", "Kelvin")));
 #endif
+
+  if (display_present) {
+    // EDIT: Duplicate the lines below to make the display show all your tanks.
+    a2_voltage->connect_to(new LambdaConsumer<float>(
+        [](float value) { PrintValue(display, 3, "Temp A2", value); }));
+  }
+
+  // Read the voltage level of analog input A3
+  auto a3_voltage_raw = new ADS1115VoltageInput(ads1115, 2, "/Voltage A3");
+
+/*
+  ConfigItem(a3_voltage_raw)
+      ->set_title("Analog Voltage A3")
+      ->set_description("Voltage level of analog input A3")
+      ->set_sort_order(3300);
+*/
+
+
+  auto a3_voltage = new sensesp::MovingAverage(3, 1.0, "/Voltage A3");
+
+  a3_voltage_raw->connect_to(a3_voltage);
+
+  a3_voltage->connect_to(new LambdaConsumer<float>(
+      [](float value) { debugD("Voltage A3: %f", value); }));
+  auto a3_pressure = (new CurveInterpolator(nullptr, "/Engine/main/Oil Pressure"))
+                        ->set_input_title("Sensor Voltage (V)")
+                        ->set_output_title("Oil Pressure (psi)");
+
+  ConfigItem(a3_pressure)
+      ->set_title("Oil Pressure (A3)")
+      ->set_description("Voltage to PSI mapping")
+      ->set_sort_order(3301);
+
+  a3_voltage->connect_to(a3_pressure);
+
+  auto a3_pressure_pa = (new Linear(6894.76, 0));
+  a3_pressure->connect_to(a3_pressure_pa);
+
+#ifdef ENABLE_SIGNALK
+  a3_voltage->connect_to(
+      new SKOutputFloat("engine.1.oil_pressure.voltage", "Oil Pressure A3", 
+                        new SKMetadata("V", "Volts")));
+
+   a3_pressure->connect_to(
+      new SKOutputFloat( "engine.1.oil_pressure.psi", "Oil Pressure (PSI)",
+                        new SKMetadata("psi", "PSI")));
+
+   a3_pressure_pa->connect_to(
+      new SKOutputFloat("engine.1.oil_pressure.pa", "Oil Pressure Pa", 
+                        new SKMetadata("pa", "Pascals")));
+#endif
+
+  if (display_present) {
+    // EDIT: Duplicate the lines below to make the display show all your tanks.
+    a3_voltage->connect_to(new LambdaConsumer<float>(
+        [](float value) { PrintValue(display, 4, "Press A3", value); }));
+  }
+
+  auto a4_voltage = new ADS1115VoltageInput(ads1115, 3, "/Voltage A4");
+
+
+  a4_voltage->connect_to(new LambdaConsumer<float>(
+      [](float value) { debugD("Voltage A2: %f", value); }));
+
+#ifdef ENABLE_SIGNALK
+  a4_voltage->connect_to(
+      new SKOutputFloat("engine.1.battery.voltage", "Engine Battery A4",
+                        new SKMetadata("V", "Volts")));
+#endif
+
+  if (display_present) {
+    // EDIT: Duplicate the lines below to make the display show all your tanks.
+    a4_voltage->connect_to(new LambdaConsumer<float>(
+        [](float value) { PrintValue(display, 5, "Batt V", value); }));
+  }
 
   ///////////////////////////////////////////////////////////////////
   // Digital alarm inputs
@@ -274,16 +369,19 @@ void setup() {
   // EDIT: More alarm inputs can be defined by duplicating the lines below.
   // Make sure to not define a pin for both a tacho and an alarm.
   auto alarm_d2_input = ConnectAlarmSender(kDigitalInputPin2, "D2");
+    auto alarm_d2_inverted = alarm_d2_input->connect_to(
+      new LambdaTransform<bool, bool>([](bool value) { return !value; }));
   auto alarm_d3_input = ConnectAlarmSender(kDigitalInputPin3, "D3");
+    auto alarm_d3_inverted = alarm_d3_input->connect_to(
+      new LambdaTransform<bool, bool>([](bool value) { return !value; }));
   // auto alarm_d4_input = ConnectAlarmSender(kDigitalInputPin4, "D4");
 
   // Update the alarm states based on the input value changes.
   // EDIT: If you added more alarm inputs, uncomment the respective lines below.
-  alarm_d2_input->connect_to(
+  alarm_d2_inverted->connect_to(
       new LambdaConsumer<bool>([](bool value) { alarm_states[1] = value; }));
   // In this example, alarm_d3_input is active low, so invert the value.
-  auto alarm_d3_inverted = alarm_d3_input->connect_to(
-      new LambdaTransform<bool, bool>([](bool value) { return !value; }));
+
   alarm_d3_inverted->connect_to(
       new LambdaConsumer<bool>([](bool value) { alarm_states[2] = value; }));
   // alarm_d4_input->connect_to(
@@ -299,9 +397,13 @@ void setup() {
   ConfigItem(engine_dynamic_sender)
       ->set_title("Engine 1 Dynamic")
       ->set_description("NMEA 2000 dynamic engine parameters for engine 1")
-      ->set_sort_order(3010);
+      ->set_sort_order(4100);
 
-  alarm_d2_input->connect_to(engine_dynamic_sender->low_oil_pressure_);
+  alarm_d2_inverted->connect_to(engine_dynamic_sender->low_oil_pressure_);
+  alarm_d3_inverted->connect_to(engine_dynamic_sender->over_temperature_);
+
+  a2_temperature_kelvin->connect_to(engine_dynamic_sender->temperature_);
+  a3_pressure_pa->connect_to(engine_dynamic_sender->oil_pressure_);
 
   // This is just an example -- normally temperature alarms would not be
   // active-low (inverted).
@@ -329,7 +431,7 @@ void setup() {
   ConfigItem(engine_rapid_sender)
       ->set_title("Engine 1 Rapid Update")
       ->set_description("NMEA 2000 rapid update engine parameters for engine 1")
-      ->set_sort_order(3015);
+      ->set_sort_order(4101);
 
   tacho_d1_frequency->connect_to(&(engine_rapid_sender->engine_speed_));
 
@@ -337,7 +439,7 @@ void setup() {
 
   if (display_present) {
     tacho_d1_frequency->connect_to(new LambdaConsumer<float>(
-        [](float value) { PrintValue(display, 3, "RPM D1", 60 * value); }));
+        [](float value) { PrintValue(display, 6, "RPM D1", 60 * value); }));
   }
 
   ///////////////////////////////////////////////////////////////////
@@ -357,7 +459,7 @@ void setup() {
       for (int i = 0; i < 4; i++) {
         state_string[i] = alarm_states[i] ? '*' : '_';
       }
-      PrintValue(display, 4, "Alarm", state_string);
+      PrintValue(display, 7, "Alarm", state_string);
     });
   }
 
