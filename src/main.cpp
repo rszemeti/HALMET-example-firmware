@@ -248,14 +248,14 @@ void setup() {
   // Read the voltage level of analog input A2
   auto a2_voltage = new ADS1115VoltageInput(ads1115, 1, "/Voltage A2");
 
-/*
+
 
   ConfigItem(a2_voltage)
       ->set_title("Analog Voltage A2")
       ->set_description("Voltage level of analog input A2")
       ->set_sort_order(3200);
 
-*/
+
 
   a2_voltage->connect_to(new LambdaConsumer<float>(
       [](float value) { debugD("Voltage A2: %f", value); }));
@@ -277,15 +277,11 @@ void setup() {
 #ifdef ENABLE_SIGNALK
   a2_voltage->connect_to(
       new SKOutputFloat("engine.1.temperature.voltage","Temp Sensor A2", 
-                        new SKMetadata("V", "Volts")));
+                        new SKMetadata("V", "Engine Temperature Sensor Voltage")));
 
    a2_temperature->connect_to(
       new SKOutputFloat("engine.1.temperature.celsius", "Engine Temperature(C)", 
-                        new SKMetadata("C", "Celsius")));
-
-   a2_temperature_kelvin->connect_to(
-      new SKOutputFloat("engine.1.temperature","Engine Temperature(K)", 
-                        new SKMetadata("K", "Kelvin")));
+                        new SKMetadata("C", "Engine Temperature")));
 #endif
 
   if (display_present) {
@@ -296,15 +292,6 @@ void setup() {
 
   // Read the voltage level of analog input A3
   auto a3_voltage_raw = new ADS1115VoltageInput(ads1115, 2, "/Voltage A3");
-
-/*
-  ConfigItem(a3_voltage_raw)
-      ->set_title("Analog Voltage A3")
-      ->set_description("Voltage level of analog input A3")
-      ->set_sort_order(3300);
-*/
-
-
   auto a3_voltage = new sensesp::MovingAverage(3, 1.0, "/Voltage A3");
 
   a3_voltage_raw->connect_to(a3_voltage);
@@ -328,15 +315,11 @@ void setup() {
 #ifdef ENABLE_SIGNALK
   a3_voltage->connect_to(
       new SKOutputFloat("engine.1.oil_pressure.voltage", "Oil Pressure A3", 
-                        new SKMetadata("V", "Volts")));
+                        new SKMetadata("V", "Oil Pressure Sensor Voltage")));
 
    a3_pressure->connect_to(
       new SKOutputFloat( "engine.1.oil_pressure.psi", "Oil Pressure (PSI)",
-                        new SKMetadata("psi", "PSI")));
-
-   a3_pressure_pa->connect_to(
-      new SKOutputFloat("engine.1.oil_pressure.pa", "Oil Pressure Pa", 
-                        new SKMetadata("pa", "Pascals")));
+                        new SKMetadata("psi", "Oil Pressure")));
 #endif
 
   if (display_present) {
@@ -354,7 +337,7 @@ void setup() {
 #ifdef ENABLE_SIGNALK
   a4_voltage->connect_to(
       new SKOutputFloat("engine.1.battery.voltage", "Engine Battery A4",
-                        new SKMetadata("V", "Volts")));
+                        new SKMetadata("V", "Engine Battery")));
 #endif
 
   if (display_present) {
