@@ -61,7 +61,7 @@ FloatProducer* ConnectTachoSender(int pin, String name) {
   return tacho_frequency;
 }
 
-BoolProducer* ConnectAlarmSender(int pin, String name, bool inverted = false) {
+BoolProducer* ConnectAlarmSender(int pin, String name, bool inverted) {
   char config_path[80];
   char sk_path[80];
   char config_title[80];
