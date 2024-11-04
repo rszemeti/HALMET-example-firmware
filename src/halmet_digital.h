@@ -6,6 +6,6 @@
 using namespace sensesp;
 
 FloatProducer* ConnectTachoSender(int pin, String name);
-BoolProducer* ConnectAlarmSender(int pin, String name);
+BoolProducer* ConnectAlarmSender(int pin, String name, bool inverted = false);
 
 #endif

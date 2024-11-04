@@ -5,6 +5,7 @@
 #include "sensesp/signalk/signalk_output.h"
 #include "sensesp/transforms/frequency.h"
 #include "sensesp/ui/config_item.h"
+#include "sensesp/transforms/lambda_transform.h"
 
 using namespace sensesp;
 
@@ -60,13 +61,22 @@ FloatProducer* ConnectTachoSender(int pin, String name) {
   return tacho_frequency;
 }
 
-BoolProducer* ConnectAlarmSender(int pin, String name) {
+BoolProducer* ConnectAlarmSender(int pin, String name, bool inverted = false) {
   char config_path[80];
   char sk_path[80];
   char config_title[80];
   char config_description[80];
 
-  auto* alarm_input = new DigitalInputState(pin, INPUT, 100);
+  // Raw alarm input without inversion
+  auto* alarm_input_raw = new DigitalInputState(pin, INPUT, 100);
+
+  // Processed alarm input, with conditional inversion applied
+  auto* alarm_input = new LambdaTransform<bool, bool>([inverted](bool value) {
+    return inverted ? !value : value;
+  });
+
+  // Connect the raw input to the processed alarm input
+  alarm_input_raw->connect_to(alarm_input);
 
 #ifdef ENABLE_SIGNALK
   snprintf(config_path, sizeof(config_path), "/Alarm %s/SK Path", name.c_str());
