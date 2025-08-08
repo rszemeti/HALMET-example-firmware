@@ -6,16 +6,18 @@
 #include "sensesp/transforms/curveinterpolator.h"
 #include "sensesp/transforms/linear.h"
 #include "sensesp/ui/config_item.h"
+#include "sensesp/transforms/moving_average.h"
+
 
 namespace halmet {
 
 // HALMET constant measurement current (A)
-const float kMeasurementCurrent = 0.01;
+const float kMeasurementCurrent = 1.0;
 
 // Default fuel tank size, in m3
 const float kTankDefaultSize = 120. / 1000;
 
-sensesp::FloatProducer* ConnectTankSender(Adafruit_ADS1115* ads1115,
+sensesp::FloatProducer* ConnectTankResistanceSender(Adafruit_ADS1115* ads1115,
                                           int channel, const String& name,
                                           const String& sk_id, int sort_order,
                                           bool enable_signalk_output) {
@@ -23,46 +25,17 @@ sensesp::FloatProducer* ConnectTankSender(Adafruit_ADS1115* ads1115,
 
   // Configure the sender resistance sensor
 
-  auto sender_resistance =
+  auto sender_resistance_raw =
       new sensesp::RepeatSensor<float>(ads_read_delay, [ads1115, channel]() {
         int16_t adc_output = ads1115->readADC_SingleEnded(channel);
         float adc_output_volts = ads1115->computeVolts(adc_output);
         return kVoltageDividerScale * adc_output_volts / kMeasurementCurrent;
       });
 
-  if (enable_signalk_output) {
-    char resistance_sk_config_path[80];
-    snprintf(resistance_sk_config_path, sizeof(resistance_sk_config_path),
-             "/Tanks/%s/Resistance/SK Path", name.c_str());
-    char resistance_title[80];
-    snprintf(resistance_title, sizeof(resistance_title),
-             "%s Tank Sender Resistance SK Path", name.c_str());
-    char resistance_description[80];
-    snprintf(resistance_description, sizeof(resistance_description),
-             "Signal K path for the sender resistance of the %s tank",
-             name.c_str());
-    char resistance_sk_path[80];
-    snprintf(resistance_sk_path, sizeof(resistance_sk_path),
-             "tanks.%s.senderResistance", sk_id.c_str());
-    char resistance_meta_display_name[80];
-    snprintf(resistance_meta_display_name, sizeof(resistance_meta_display_name),
-             "Resistance %s", name.c_str());
-    char resistance_meta_description[80];
-    snprintf(resistance_meta_description, sizeof(resistance_meta_description),
-             "Measured tank %s sender resistance", name.c_str());
+  auto sender_resistance = new sensesp::MovingAverage(20, 1.0, "/Resistance A1");
+  sender_resistance_raw->connect_to(sender_resistance);
 
-    auto sender_resistance_sk_output = new sensesp::SKOutputFloat(
-        resistance_sk_path, resistance_sk_config_path,
-        new sensesp::SKMetadata("ohm", resistance_meta_display_name,
-                                resistance_meta_description));
 
-    ConfigItem(sender_resistance_sk_output)
-        ->set_title(resistance_title)
-        ->set_description(resistance_description)
-        ->set_sort_order(sort_order);
-
-    sender_resistance->connect_to(sender_resistance_sk_output);
-  }
 
   // Configure the piecewise linear interpolator for the tank level (ratio)
 
@@ -183,6 +156,57 @@ sensesp::FloatProducer* ConnectTankSender(Adafruit_ADS1115* ads1115,
   }
 
   return tank_level;
+}
+
+sensesp::FloatProducer* ConnectTankVoltageSender(Adafruit_ADS1115* ads1115,
+  int channel, const String& name,
+  const String& sk_id, int sort_order,
+  bool enable_signalk_output) {
+
+  const uint ads_read_delay = 500;  // ms
+
+// Configure the sender voltage
+
+  auto sender_voltage =
+  new sensesp::RepeatSensor<float>(ads_read_delay, [ads1115, channel]() {
+    int16_t adc_output = ads1115->readADC_SingleEnded(channel);
+    float adc_output_volts = ads1115->computeVolts(adc_output);
+    return adc_output_volts;
+  });
+
+// Configure the piecewise linear interpolator for the tank level (ratio)
+
+char curve_config_path[80];
+snprintf(curve_config_path, sizeof(curve_config_path),
+"/Tanks/%s/Voltage Level Curve", name.c_str());
+char curve_title[80];
+snprintf(curve_title, sizeof(curve_title), "%s Tank Level Curve",
+name.c_str());
+char curve_description[80];
+snprintf(curve_description, sizeof(curve_description),
+"Piecewise linear curve for the %s tank level", name.c_str());
+
+  auto tank_level_curve = (new sensesp::CurveInterpolator(nullptr, curve_config_path))
+    ->set_input_title("Sender Voltage (V)")
+    ->set_output_title("Fuel Level (ratio)");
+
+  ConfigItem(tank_level_curve)
+    ->set_title(curve_title)
+    ->set_description(curve_description)
+    ->set_sort_order(sort_order + 1);
+
+  if (tank_level_curve->get_samples().empty()) {
+    // If there's no prior configuration, provide a default curve
+    tank_level_curve->clear_samples();
+    tank_level_curve->add_sample(sensesp::CurveInterpolator::Sample(0.0, 0.));
+    tank_level_curve->add_sample(sensesp::CurveInterpolator::Sample(10.0, 1.0));
+  }
+
+  sender_voltage->connect_to(tank_level_curve);
+
+  
+
+  return tank_level_curve;
 }
 
 }  // namespace halmet

@@ -11,7 +11,12 @@ namespace halmet {
 // HALMET voltage divider scale factor
 const float kVoltageDividerScale = 33.3 / 3.3;
 
-sensesp::FloatProducer* ConnectTankSender(Adafruit_ADS1115* ads1115,
+sensesp::FloatProducer* ConnectTankResistanceSender(Adafruit_ADS1115* ads1115,
+                                          int channel, const String& name,
+                                          const String& sk_id, int sort_order,
+                                          bool enable_signalk_output = true);
+
+sensesp::FloatProducer* ConnectTankVoltageSender(Adafruit_ADS1115* ads1115,
                                           int channel, const String& name,
                                           const String& sk_id, int sort_order,
                                           bool enable_signalk_output = true);

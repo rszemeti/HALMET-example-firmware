@@ -61,7 +61,7 @@ FloatProducer* ConnectTachoSender(int pin, String name) {
   return tacho_frequency;
 }
 
-BoolProducer* ConnectAlarmSender(int pin, String name, bool inverted) {
+BoolProducer* ConnectAlarmSender(int pin, String name, bool inverted, bool enable_signalk_output) {
   char config_path[80];
   char sk_path[80];
   char config_title[80];
@@ -79,20 +79,23 @@ BoolProducer* ConnectAlarmSender(int pin, String name, bool inverted) {
   alarm_input_raw->connect_to(alarm_input);
 
 #ifdef ENABLE_SIGNALK
-  snprintf(config_path, sizeof(config_path), "/Alarm %s/SK Path", name.c_str());
-  snprintf(sk_path, sizeof(sk_path), "alarm.%s", name.c_str());
-  snprintf(config_title, sizeof(config_title), "Alarm %s Signal K Path",
-           name.c_str());
-  snprintf(config_description, sizeof(config_description),
-           "Alarm %s Signal K Path", name.c_str());
+  if(enable_signalk_output){
+    snprintf(config_path, sizeof(config_path), "/Alarm %s/SK Path", name.c_str());
+    snprintf(sk_path, sizeof(sk_path), "alarm.%s", name.c_str());
+    snprintf(config_title, sizeof(config_title), "Alarm %s Signal K Path",
+            name.c_str());
+    snprintf(config_description, sizeof(config_description),
+            "Alarm %s Signal K Path", name.c_str());
 
-  auto alarm_sk_output = new SKOutputBool(sk_path, config_path);
+    auto alarm_sk_output = new SKOutputBool(sk_path, config_path);
 
-  ConfigItem(alarm_sk_output)
-      ->set_title(config_title)
-      ->set_description(config_description);
+    ConfigItem(alarm_sk_output)
+        ->set_title(config_title)
+        ->set_description(config_description);
 
-  alarm_input->connect_to(alarm_sk_output);
+    alarm_input->connect_to(alarm_sk_output);
+  }
+
 #endif
 
   return alarm_input;

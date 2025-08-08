@@ -30,6 +30,8 @@
 #include "sensesp/transforms/moving_average.h"
 #include "sensesp/ui/config_item.h"
 
+#define ENABLE_SIGNALK_OUTPUT 1
+
 #ifdef ENABLE_SIGNALK
 #include "sensesp_app_builder.h"
 #define BUILDER_CLASS SensESPAppBuilder
@@ -118,8 +120,8 @@ void setup() {
                     ->set_hostname("halmet")
                     // EDIT: Optionally, hard-code the WiFi and Signal K server
                     // settings. This is normally not needed.
-                    //->set_wifi("My WiFi SSID", "my_wifi_password")
-                    //->set_sk_server("192.168.10.3", 80)
+                    //->set_wifi_client("OpenPlotter", "12345678")
+                    //->set_sk_server("192.168.178.36", 3000)
                     // EDIT: Enable OTA updates with a password.
                     //->enable_ota("my_ota_password")
                     ->get_app();
@@ -207,7 +209,7 @@ void setup() {
   ///////////////////////////////////////////////////////////////////
   // Analog inputs
 
-#ifdef ENABLE_SIGNALK
+#ifdef ENABLE_SIGNALK_OUTPUT
   bool enable_signalk_output = true;
 #else
   bool enable_signalk_output = false;
@@ -216,16 +218,13 @@ void setup() {
   int sortOrder =3000;
   // Connect the tank senders.
   // EDIT: To enable more tanks, uncomment the lines below.
-  auto tank_a1_volume = ConnectTankSender(ads1115, 0, "Fuel", "fuel.main", 3000,
+  auto tank_a1_volume = ConnectTankResistanceSender(ads1115, 0, "Fuel", "fuel.main", 3000,
                                           enable_signalk_output);
-  // auto tank_a2_volume = ConnectTankSender(ads1115, 1, "A2");
-  // auto tank_a3_volume = ConnectTankSender(ads1115, 2, "A3");
-  // auto tank_a4_volume = ConnectTankSender(ads1115, 3, "A4");
 
 #ifdef ENABLE_NMEA2000_OUTPUT
   // Tank 1, instance 0. Capacity 200 liters. You can change the capacity
   // in the web UI as well.
-  // EDIT: Make sure this matches your tank configuration above.
+  // EDIT: Make sure this matches your tank configuration abov.
   N2kFluidLevelSender* tank_a1_sender = new N2kFluidLevelSender(
       "/Tanks/Fuel/NMEA 2000", 0, N2kft_Fuel, 200, nmea2000);
 
@@ -257,8 +256,8 @@ void setup() {
 
 
 
-  a2_voltage->connect_to(new LambdaConsumer<float>(
-      [](float value) { debugD("Voltage A2: %f", value); }));
+  //a2_voltage->connect_to(new LambdaConsumer<float>(
+     // [](float value) { debugD("Voltage A2: %f", value); }));
 
   auto a2_temperature = (new CurveInterpolator(nullptr, "/Engine/main/Temp A2"))
                         ->set_input_title("Sensor Voltage (V)")
@@ -274,7 +273,7 @@ void setup() {
   auto a2_temperature_kelvin = (new Linear(1, 273.15));
   a2_temperature->connect_to(a2_temperature_kelvin);
 
-#ifdef ENABLE_SIGNALK
+#ifdef ENABLE_SIGNALK_OUTPUT
   a2_voltage->connect_to(
       new SKOutputFloat("engine.1.temperature.voltage","Temp Sensor A2", 
                         new SKMetadata("V", "Engine Temperature Sensor Voltage")));
@@ -296,8 +295,8 @@ void setup() {
 
   a3_voltage_raw->connect_to(a3_voltage);
 
-  a3_voltage->connect_to(new LambdaConsumer<float>(
-      [](float value) { debugD("Voltage A3: %f", value); }));
+  //a3_voltage->connect_to(new LambdaConsumer<float>(
+  //    [](float value) { debugD("Voltage A3: %f", value); }));
   auto a3_pressure = (new CurveInterpolator(nullptr, "/Engine/main/Oil Pressure"))
                         ->set_input_title("Sensor Voltage (V)")
                         ->set_output_title("Oil Pressure (psi)");
@@ -312,7 +311,7 @@ void setup() {
   auto a3_pressure_pa = (new Linear(6894.76, 0));
   a3_pressure->connect_to(a3_pressure_pa);
 
-#ifdef ENABLE_SIGNALK
+#ifdef ENABLE_SIGNALK_OUTPUT
   a3_voltage->connect_to(
       new SKOutputFloat("engine.1.oil_pressure.voltage", "Oil Pressure A3", 
                         new SKMetadata("V", "Oil Pressure Sensor Voltage")));
@@ -331,14 +330,29 @@ void setup() {
   auto a4_voltage = new ADS1115VoltageInput(ads1115, 3, "/Voltage A4");
 
 
-  a4_voltage->connect_to(new LambdaConsumer<float>(
-      [](float value) { debugD("Voltage A2: %f", value); }));
+ // a4_voltage->connect_to(new LambdaConsumer<float>(
+ //     [](float value) { debugD("Voltage A2: %f", value); }));
 
-#ifdef ENABLE_SIGNALK
+#ifdef ENABLE_SIGNALK_OUTPUT
   a4_voltage->connect_to(
       new SKOutputFloat("engine.1.battery.voltage", "Engine Battery A4",
                         new SKMetadata("V", "Engine Battery")));
 #endif
+
+#ifdef ENABLE_NMEA2000_OUTPUT
+
+  auto* battery_output = new LambdaConsumer<float>([](float input) -> void {
+    tN2kMsg N2kMsg;
+    SetN2kPGN127508(N2kMsg, 1, input, 0.0,293.0,0xFF);
+    nmea2000->SendMsg(N2kMsg);
+  });
+
+  // connect the temperature input to N2K output
+
+  a4_voltage->connect_to(battery_output);
+
+
+#endif  // ENABLE_NMEA2000_OUTPUT
 
   if (display_present) {
     // EDIT: Duplicate the lines below to make the display show all your tanks.
@@ -351,8 +365,8 @@ void setup() {
 
   // EDIT: More alarm inputs can be defined by duplicating the lines below.
   // Make sure to not define a pin for both a tacho and an alarm.
-  auto alarm_d2_input = ConnectAlarmSender(kDigitalInputPin2, "D2", true);
-  auto alarm_d3_input = ConnectAlarmSender(kDigitalInputPin3, "D3", true);
+  auto alarm_d2_input = ConnectAlarmSender(kDigitalInputPin2, "D2", true, enable_signalk_output);
+  auto alarm_d3_input = ConnectAlarmSender(kDigitalInputPin3, "D3", true, enable_signalk_output);
   // auto alarm_d4_input = ConnectAlarmSender(kDigitalInputPin4, "D4");
 
   // Update the alarm states based on the input value changes.
